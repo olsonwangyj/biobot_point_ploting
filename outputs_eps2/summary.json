@@ -1,0 +1,200 @@
+{
+  "patient_root": "d:\\point_plotting_reserch\\Siemens testing data results on RTStruct\\N11830957",
+  "rtstruct": "d:\\point_plotting_reserch\\Siemens testing data results on RTStruct\\N11830957\\AIRC Research Prostate MR - RTSTRUCT_NotForClinicalUse\\_.RTSTRUCT.prostate.3030.0.2025.12.09.07.30.49.960.11930305.dcm",
+  "roi": "Prostate",
+  "roi_number": 1,
+  "slices": [
+    {
+      "sop_uid": "1.2.840.113619.2.353.2807.8093228.17158.1680134474.137",
+      "contours": [
+        {
+          "metrics": {
+            "n_original": 308.0,
+            "n_simplified": 7.0,
+            "area_original": 396.98365000000047,
+            "area_simplified": 374.9739499999999,
+            "area_rel_error": 0.05544233370820323
+          },
+          "density_original": {
+            "n_points": 308,
+            "min_step": 0.30999999999999517,
+            "p25_step": 0.3099999999999987,
+            "median_step": 0.3100000000000023,
+            "p75_step": 0.3100403120963555,
+            "max_step": 0.3201562118716429,
+            "mean_step": 0.3123407871876581
+          },
+          "density_simplified": {
+            "n_points": 7,
+            "min_step": 4.640096981745101,
+            "p25_step": 8.815507986489967,
+            "median_step": 10.427353451379696,
+            "p75_step": 13.687820561800304,
+            "max_step": 14.066005118725071,
+            "mean_step": 10.591444664061488
+          }
+        }
+      ]
+    },
+    {
+      "sop_uid": "1.2.840.113619.2.353.2807.8093228.17158.1680134474.146",
+      "contours": [
+        {
+          "metrics": {
+            "n_original": 508.0,
+            "n_simplified": 9.0,
+            "area_original": 1134.5079999999996,
+            "area_simplified": 1104.8330999999998,
+            "area_rel_error": 0.026156624721905674
+          },
+          "density_original": {
+            "n_points": 508,
+            "min_step": 0.30999999999999517,
+            "p25_step": 0.3099999999999987,
+            "median_step": 0.3100000000000023,
+            "p75_step": 0.3101612483854125,
+            "max_step": 0.32015621187164267,
+            "mean_step": 0.3123466163769077
+          },
+          "density_simplified": {
+            "n_points": 9,
+            "min_step": 8.93615129683915,
+            "p25_step": 11.171409937872658,
+            "median_step": 13.190640621289013,
+            "p75_step": 15.233755282267074,
+            "max_step": 24.19161011590589,
+            "mean_step": 13.996229627681998
+          }
+        }
+      ]
+    },
+    {
+      "sop_uid": "1.2.840.113619.2.353.2807.8093228.17158.1680134474.136",
+      "contours": [
+        {
+          "metrics": {
+            "n_original": 558.0,
+            "n_simplified": 9.0,
+            "area_original": 1407.0260500000015,
+            "area_simplified": 1344.61735,
+            "area_rel_error": 0.04435504232491039
+          },
+          "density_original": {
+            "n_points": 558,
+            "min_step": 0.30999999999999517,
+            "p25_step": 0.3099999999999987,
+            "median_step": 0.3100000000000023,
+            "p75_step": 0.31016124838541526,
+            "max_step": 0.3201562118716428,
+            "mean_step": 0.31238667322439434
+          },
+          "density_simplified": {
+            "n_points": 9,
+            "min_step": 7.274970790319364,
+            "p25_step": 11.714418466146748,
+            "median_step": 14.62746047678817,
+            "p75_step": 18.92326610286924,
+            "max_step": 24.078747891034535,
+            "mean_step": 15.392470958834256
+          }
+        }
+      ]
+    },
+    {
+      "sop_uid": "1.2.840.113619.2.353.2807.8093228.17158.1680134474.145",
+      "contours": [
+        {
+          "metrics": {
+            "n_original": 558.0,
+            "n_simplified": 9.0,
+            "area_original": 1414.5378499999988,
+            "area_simplified": 1372.0550500000004,
+            "area_rel_error": 0.03003298921976421
+          },
+          "density_original": {
+            "n_points": 558,
+            "min_step": 0.30999999999999517,
+            "p25_step": 0.3099999999999987,
+            "median_step": 0.3100000000000023,
+            "p75_step": 0.3100000000000023,
+            "max_step": 0.3201562118716428,
+            "mean_step": 0.31242078166469456
+          },
+          "density_simplified": {
+            "n_points": 9,
+            "min_step": 8.573126617518255,
+            "p25_step": 11.74225276512135,
+            "median_step": 13.618212070606038,
+            "p75_step": 16.79969344958413,
+            "max_step": 29.13394240400705,
+            "mean_step": 15.48345325469903
+          }
+        }
+      ]
+    },
+    {
+      "sop_uid": "1.2.840.113619.2.353.2807.8093228.17158.1680134474.135",
+      "contours": [
+        {
+          "metrics": {
+            "n_original": 518.0,
+            "n_simplified": 11.0,
+            "area_original": 1039.3189999999997,
+            "area_simplified": 1013.2372999999999,
+            "area_rel_error": 0.025094990084853493
+          },
+          "density_original": {
+            "n_points": 518,
+            "min_step": 0.30999999999999517,
+            "p25_step": 0.3099999999999987,
+            "median_step": 0.3100000000000023,
+            "p75_step": 0.3101209362890619,
+            "max_step": 0.3200000000000003,
+            "mean_step": 0.3123956901357384
+          },
+          "density_simplified": {
+            "n_points": 11,
+            "min_step": 5.638528176749669,
+            "p25_step": 8.95982210651773,
+            "median_step": 10.575731653176529,
+            "p75_step": 13.336883871288006,
+            "max_step": 18.493147379502496,
+            "mean_step": 11.195242346812442
+          }
+        }
+      ]
+    },
+    {
+      "sop_uid": "1.2.840.113619.2.353.2807.8093228.17158.1680134474.144",
+      "contours": [
+        {
+          "metrics": {
+            "n_original": 224.0,
+            "n_simplified": 7.0,
+            "area_original": 178.4600999999998,
+            "area_simplified": 162.52265,
+            "area_rel_error": 0.08930539655642819
+          },
+          "density_original": {
+            "n_points": 224,
+            "min_step": 0.30999999999999517,
+            "p25_step": 0.3099999999999987,
+            "median_step": 0.3100000000000023,
+            "p75_step": 0.31999999999999673,
+            "max_step": 0.32015621187164267,
+            "mean_step": 0.3126375053813094
+          },
+          "density_simplified": {
+            "n_points": 7,
+            "min_step": 5.632983223834421,
+            "p25_step": 6.642875592240896,
+            "median_step": 7.545283294880321,
+            "p75_step": 9.1040761916403,
+            "max_step": 10.120948572144803,
+            "mean_step": 7.8275883798031325
+          }
+        }
+      ]
+    }
+  ]
+}
