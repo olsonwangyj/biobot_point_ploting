@@ -415,3 +415,111 @@ Hausdorff 距离度量的是：
 - **平滑曲线方法仅影响视觉表现，而非核心几何一致性**
 
 ---
+
+# 问题四：不同面积切片的对比（small / medium / large）
+
+本节用于补全“不同面积的轮廓在简化时是否表现一致”的问题。由于前列腺在不同 Z 切片上的截面积差异明显（靠近顶端/底端面积小，中间面积大），同样的采样点数对不同面积切片的误差表现可能不同。
+
+## 1. 切片选择方式（与代码一致）
+
+使用脚本 [src/area_diff.py](src/area_diff.py) 的 `select_examples_by_area()`：
+
+- 先计算每个切片轮廓面积 `area`，按面积从小到大排序
+- 按面积分位数挑选代表性切片：
+  - small：10% 分位（q=0.1）
+  - medium：60% 分位（q=0.6）
+  - large：80% 分位（q=0.8）
+
+这样可以避免“只挑最大面积那一张”的偏差，保证 small/medium/large 都来自真实数据分布。
+
+## 2. 评价指标（与代码一致）
+
+- 面积相对误差（百分比）：
+
+$$\text{AreaErr}(\%) = \frac{|A_{simp} - A_{orig}|}{A_{orig}} \times 100$$
+
+- Hausdorff 距离（mm）：使用 **点到折线段（point-to-segment）** 的 Hausdorff，避免因两条曲线采样密度不同导致的“点对点 Hausdorff”虚高。
+
+注：图中黑线/彩色线使用 Chaikin 平滑仅用于展示；误差计算基于简化后的折线点集。
+
+## 3. 实验结果（N11780398，ROI=Prostate）
+
+脚本会对每个面积代表切片输出 `POINT_LIST = [16, 32, 48, 64, 128, 256]` 下的误差：
+
+### 3.1 small example
+
+small 切片示例：`area ≈ 453.42`，`z ≈ 0.66`
+
+| pts | area_err (%) | Hausdorff (mm) |
+|-----|--------------|----------------|
+| 16  | 2.428        | 1.724          |
+| 32  | 1.011        | 1.027          |
+| 48  | 0.581        | 0.902          |
+| 64  | 0.376        | 0.691          |
+| 128 | 0.038        | 0.449          |
+| 256 | 0.011        | 0.191          |
+
+可视化（不同点数对比）：
+
+![small-16pts](output_adaptive_smooth/area_small/compare_016pts.png)
+![small-32pts](output_adaptive_smooth/area_small/compare_032pts.png)
+![small-48pts](output_adaptive_smooth/area_small/compare_048pts.png)
+![small-64pts](output_adaptive_smooth/area_small/compare_064pts.png)
+
+---
+
+### 3.2 medium example
+
+medium 切片示例：`area ≈ 1303.78`，`z ≈ -5.02`
+
+| pts | area_err (%) | Hausdorff (mm) |
+|-----|--------------|----------------|
+| 16  | 2.203        | 1.766          |
+| 32  | 0.695        | 0.996          |
+| 48  | 0.431        | 0.566          |
+| 64  | 0.196        | 0.497          |
+| 128 | 0.068        | 0.398          |
+| 256 | 0.009        | 0.254          |
+
+可视化（不同点数对比）：
+
+![medium-16pts](output_adaptive_smooth/area_medium/compare_016pts.png)
+![medium-32pts](output_adaptive_smooth/area_medium/compare_032pts.png)
+![medium-48pts](output_adaptive_smooth/area_medium/compare_048pts.png)
+![medium-64pts](output_adaptive_smooth/area_medium/compare_064pts.png)
+
+---
+
+### 3.3 large example
+
+large 切片示例：`area ≈ 1483.18`，`z ≈ -16.77`
+
+| pts | area_err (%) | Hausdorff (mm) |
+|-----|--------------|----------------|
+| 16  | 3.551        | 1.310          |
+| 32  | 1.401        | 0.927          |
+| 48  | 0.464        | 0.556          |
+| 64  | 0.428        | 0.482          |
+| 128 | 0.133        | 0.368          |
+| 256 | 0.029        | 0.252          |
+
+可视化（不同点数对比）：
+
+![large-16pts](output_adaptive_smooth/area_large/compare_016pts.png)
+![large-32pts](output_adaptive_smooth/area_large/compare_032pts.png)
+![large-48pts](output_adaptive_smooth/area_large/compare_048pts.png)
+![large-64pts](output_adaptive_smooth/area_large/compare_064pts.png)
+
+## 4. 结论：不同面积切片的误差表现差异
+
+从 small / medium / large 的对比可以得到两个结论：
+
+1. **面积误差并不单调决定形状误差**：例如 small 在 64pts 时面积误差仅 **0.376%**，但 Hausdorff 仍有 **0.691 mm**，说明整体面积已很接近，但边界某些局部位置仍可能出现较大偏移。
+2. **最小可接受点数依赖于阈值与切片类型**：
+   - 若以 Hausdorff ≤ 0.5mm 为阈值，medium/large 在 64pts 基本可达标，而 small 往往需要更高点数（如 128pts）才能稳定进入 0.5mm。
+
+因此，若要给出“统一的最小点数”，建议按研究目标选择：
+
+- 更强调整体量（面积/体积）稳定：可用较小点数（如 48–64）
+- 更强调边界最大偏差（剂量学/几何误差敏感）：建议更保守的点数（如 ≥128）或采用自适应采样并为 small 切片单独设置点数策略
+
