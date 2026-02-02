@@ -1,4 +1,6 @@
 pydicom
 numpy
 matplotlib
+scipy
+shapely
 scikit-image
