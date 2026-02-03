@@ -55,7 +55,7 @@ def discrete_curvature(points):
     return np.arccos(np.clip(cos, -1.0, 1.0))
 
 # ============================================================
-# 自适应采样（正确维度版）
+# 自适应采样
 # ============================================================
 
 def resample_adaptive_polyline(points, n, alpha=5.0):
@@ -91,7 +91,7 @@ def resample_adaptive_polyline(points, n, alpha=5.0):
     return np.array(res)
 
 # ============================================================
-# Chaikin 平滑（局部、不炸 Hausdorff）
+# Chaikin 平滑
 # ============================================================
 
 def chaikin(points, n_iter=3):

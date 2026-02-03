@@ -7,7 +7,7 @@ from shapely.ops import nearest_points
 
 
 # =========================
-# 参数区（你以后只改这里）
+# 参数区
 # =========================
 ROOT_DIR = Path(r"D:\point_plotting_reserch\Siemens testing data results on RTStruct\N11780398")
 ROI_NAME = "Prostate"
@@ -121,7 +121,7 @@ from shapely.ops import nearest_points
 
 
 # =========================
-# 参数区（你以后只改这里）
+# 参数区
 # =========================
 ROOT_DIR = Path(r"D:\point_plotting_reserch\Siemens testing data results on RTStruct\N11780398")
 ROI_NAME = "Prostate"
