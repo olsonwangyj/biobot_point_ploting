@@ -1,0 +1,10 @@
+﻿# Python env
+.venv/
+__pycache__/
+*.pyc
+
+# Generated figures and metrics
+output*/
+outputs*/
+src/output*/
+src/outputs*/
