@@ -1,0 +1,44 @@
+==========================
+UroFusion Release Notes
+==========================
+Version 5.5.0.867 (24 Sep 2024)
+- change Create Case Dialog label from "Fusion Case" to "MRI Images"
+
+Version 5.5.0.862 (09 Sep 2024)
+- add warning message when loading dicom without Patient ID or Patient Name
+- remove debug Patient Info when creating new Case by release software to Release
+- fixed issue on image stack not cleared when creating new case or opening new case
+- fixed crash issue when opening case after previously open and loaded MRI images
+- fixed issue on updating MRI series on reopening or recreating new case
+
+Version 5.5.0.839 (17 Jul 2024)
+- add auto populate of patient info when case is selected
+
+Version 5.4.0.820 (24 Apr 2024)
+- updated application icon
+- improved prostate model 3D display
+
+Version 5.4.0.802 (29 Jan 2024)
+- bug fixing
+
+Version 5.4.0.795 (5 Jan 2024)
+- new user interface
+
+Version 5.3.0.754 (3 May 2023)
+- added License module
+
+Version 5.2.1.731 (14 Oct 2022)
+- Resolved import RT Struct issues, e.g., handling cases where there are only 2 points in a contour, or where there are more than one contours in a single lesion slice
+- Resolved crash during lesion modelling (delete lesion contour)
+
+Version 5.2.0.728 (19 Sep 2022)
+- removed encryption/decryption protection for patient data
+
+Version 5.1.0.721 (10 Jun 2022)
+- added new feature in the modelling stage to allow for loading an RT struct file to load prostate and lesion models
+
+Version 5.0.0.698 (29 Sep 2021)
+- upgraded to Windows 10 / VS 2017
+- upgraded Qt to 5.12.10
+- upgraded VTK to 9.0.1
+- upgraded ITK to 5.1.1
