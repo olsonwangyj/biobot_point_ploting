@@ -5,19 +5,16 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import pydicom
 from scipy.interpolate import splprep, splev
+from path_utils import find_first_rtstruct, infer_image_root
 
 
 # ============================================================
 # Config (edit here)
 # ============================================================
-RTSTRUCT_PATH = (
-    r"D:\point_plotting_reserch\Siemens testing data results on RTStruct\N11780398"
-    r"\AIRC Research Prostate MR - RTSTRUCT_NotForClinicalUse"
-    r"\_.RTSTRUCT.prostate.3030.0.2025.12.09.07.30.49.960.11930327.dcm"
-)
+RTSTRUCT_PATH = find_first_rtstruct()
 
 # Root folder containing image DICOM slices referenced by RTSTRUCT contours
-IMAGE_ROOT = r"D:\point_plotting_reserch\Siemens testing data results on RTStruct\N11780398"
+IMAGE_ROOT = infer_image_root(RTSTRUCT_PATH)
 
 # Output XML for local testing (always write to project root)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

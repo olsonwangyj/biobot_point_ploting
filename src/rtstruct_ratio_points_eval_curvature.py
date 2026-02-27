@@ -4,15 +4,12 @@ import numpy as np
 import pydicom
 import matplotlib.pyplot as plt
 from scipy.interpolate import splprep, splev
+from path_utils import find_first_rtstruct
 
 # ============================================================
 # Config
 # ============================================================
-RTSTRUCT_PATH = (
-    r"D:\point_plotting_reserch\Siemens testing data results on RTStruct\N11780398"
-    r"\AIRC Research Prostate MR - RTSTRUCT_NotForClinicalUse"
-    r"\_.RTSTRUCT.prostate.3030.0.2025.12.09.07.30.49.960.11930327.dcm"
-)
+RTSTRUCT_PATH = find_first_rtstruct()
 ROI_NAME = "Prostate"
 
 RATIO_LIST = [0.03, 0.04, 0.05, 0.06, 0.08]

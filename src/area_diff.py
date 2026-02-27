@@ -2,16 +2,16 @@ import numpy as np
 import pydicom
 import matplotlib.pyplot as plt
 from pathlib import Path
+from path_utils import find_first_rtstruct, output_dir
 
 # ============================================================
 # 配置
 # ============================================================
 
-RTSTRUCT_PATH = r"D:\point_plotting_reserch\Siemens testing data results on RTStruct\N11780398\AIRC Research Prostate MR - RTSTRUCT_NotForClinicalUse\_.RTSTRUCT.prostate.3030.0.2025.12.09.07.30.49.960.11930327.dcm"
+RTSTRUCT_PATH = find_first_rtstruct()
 
 POINT_LIST = [16, 32, 48, 64, 128, 256]
-OUT_DIR = Path("output_adaptive_smooth")
-OUT_DIR.mkdir(exist_ok=True)
+OUT_DIR = output_dir("output_adaptive_smooth")
 
 # ============================================================
 # 读取 RTSTRUCT（XY）

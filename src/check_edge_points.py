@@ -1,8 +1,8 @@
-from pathlib import Path
 import pydicom
+from path_utils import find_first_rtstruct
 
 # 1. 找到一个 RTSTRUCT 文件
-rtstruct_path = next(Path(r'd:\point_plotting_reserch').rglob('*.RTSTRUCT*.dcm'))
+rtstruct_path = find_first_rtstruct()
 
 # 2. 读取 DICOM
 ds = pydicom.dcmread(str(rtstruct_path))

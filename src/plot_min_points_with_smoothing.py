@@ -4,14 +4,13 @@ import pydicom
 import matplotlib.pyplot as plt
 from shapely.geometry import Polygon, LinearRing
 from scipy.interpolate import splprep, splev
+from path_utils import infer_case_root, output_dir
 
 
 # ==================================================
 # 参数区（只改这里）
 # ==================================================
-ROOT_DIR = Path(
-    r"D:\point_plotting_reserch\Siemens testing data results on RTStruct\N11780398"
-)
+ROOT_DIR = infer_case_root()
 ROI_NAME = "Prostate"
 
 POINT_LIST = [16, 32, 48, 64, 128, 256]
@@ -19,8 +18,7 @@ POINT_LIST = [16, 32, 48, 64, 128, 256]
 AREA_TOL = 0.01       # 1 %
 HAUSDORFF_TOL = 0.5   # mm
 
-OUT_DIR = Path("outputs")
-OUT_DIR.mkdir(exist_ok=True)
+OUT_DIR = output_dir("outputs")
 
 
 # ==================================================
