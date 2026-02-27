@@ -20,12 +20,21 @@ IMAGE_ROOT = infer_image_root(RTSTRUCT_PATH)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUT_XML = PROJECT_ROOT / "outputs_model_xml_test" / "model.xml"
 
-# Sampling mode: "ratio" or "fixed_points"
-POINT_POLICY = "ratio"
+# Sampling mode:
+# - "ratio"
+# - "fixed_points"
+# - "metric_threshold" (auto-search min points by area_diff + hausdorff)
+POINT_POLICY = "metric_threshold"
 RATIO = 0.08
 FIXED_POINTS = 48
 MIN_POINTS = 3
 CURVATURE_ALPHA = 5.0
+
+# Metric-threshold policy config (used when POINT_POLICY == "metric_threshold")
+AREA_DIFF_TOL = 0.1          # relative, e.g. 0.01 = 1%
+HAUSDORFF_TOL = 0.8           # mm
+METRIC_MAX_POINTS = None      # None => search up to original point count
+METRIC_NO_MATCH_STRATEGY = "max_points"  # "max_points" or "ratio" or "fixed_points"
 
 # Optional: export fitted dense curve instead of sampled control polygon
 EXPORT_MODE = "adaptive_raw"  # "adaptive_raw" or "adaptive_fit_dense"
@@ -73,6 +82,52 @@ def _close_polyline(points: np.ndarray) -> np.ndarray:
     if np.allclose(points[0], points[-1]):
         return points
     return np.vstack([points, points[0]])
+
+
+def _point_to_segments_min_dist(
+    points: np.ndarray, seg_start: np.ndarray, seg_end: np.ndarray
+) -> np.ndarray:
+    points = np.asarray(points, dtype=float)
+    seg_start = np.asarray(seg_start, dtype=float)
+    seg_end = np.asarray(seg_end, dtype=float)
+
+    if len(points) == 0 or len(seg_start) == 0:
+        return np.empty((0,), dtype=float)
+
+    n_points = points.shape[0]
+    out = np.empty((n_points,), dtype=float)
+
+    v = seg_end - seg_start
+    vv = np.sum(v * v, axis=1)
+    vv = np.where(vv == 0.0, 1e-12, vv)
+
+    chunk = 2048
+    for i0 in range(0, n_points, chunk):
+        p = points[i0:i0 + chunk]
+        w = p[:, None, :] - seg_start[None, :, :]
+        t = np.sum(w * v[None, :, :], axis=2) / vv[None, :]
+        t = np.clip(t, 0.0, 1.0)
+        proj = seg_start[None, :, :] + t[:, :, None] * v[None, :, :]
+        d = np.linalg.norm(p[:, None, :] - proj, axis=2)
+        out[i0:i0 + chunk] = np.min(d, axis=1)
+
+    return out
+
+
+def hausdorff_polyline(a_points: np.ndarray, b_points: np.ndarray) -> float:
+    a = np.asarray(a_points, dtype=float)
+    b = np.asarray(b_points, dtype=float)
+    if len(a) == 0 or len(b) == 0:
+        return float("nan")
+
+    a_closed = _close_polyline(a)
+    b_closed = _close_polyline(b)
+    a_seg0, a_seg1 = a_closed[:-1], a_closed[1:]
+    b_seg0, b_seg1 = b_closed[:-1], b_closed[1:]
+
+    da = _point_to_segments_min_dist(a, b_seg0, b_seg1)
+    db = _point_to_segments_min_dist(b, a_seg0, a_seg1)
+    return float(max(np.max(da), np.max(db)))
 
 
 def discrete_curvature(points: np.ndarray) -> np.ndarray:
@@ -413,20 +468,57 @@ def build_model_xml(submodels: list[dict]) -> ET.ElementTree:
 # ============================================================
 # Conversion pipeline (RTSTRUCT -> model-like XML)
 # ============================================================
-def n_target_from_policy(n_orig: int) -> int:
-    if POINT_POLICY == "ratio":
+def n_target_from_basic_policy(n_orig: int, policy: str | None = None) -> int:
+    p = (policy or POINT_POLICY).lower().strip()
+    if p == "ratio":
         return max(MIN_POINTS, int(round(n_orig * float(RATIO))))
-    if POINT_POLICY == "fixed_points":
+    if p == "fixed_points":
         return max(MIN_POINTS, int(FIXED_POINTS))
-    raise ValueError(f"Unknown POINT_POLICY: {POINT_POLICY}")
+    raise ValueError(f"Unknown basic policy: {p}")
 
 
-def sample_contour_for_export(xy: np.ndarray) -> np.ndarray:
-    n_target = n_target_from_policy(len(xy))
+def _build_export_curve_from_n(xy: np.ndarray, n_target: int) -> np.ndarray:
     sampled = resample_adaptive_polyline(xy, n_target, alpha=CURVATURE_ALPHA)
     if EXPORT_MODE == "adaptive_fit_dense":
         return fit_closed_bspline_curve(sampled, smooth=SPLINE_SMOOTH, n_fit=FIT_DENSE_POINTS)
     return sampled
+
+
+def _sample_by_metric_threshold(xy: np.ndarray) -> np.ndarray:
+    pts = np.asarray(xy, dtype=float)
+    n_orig = len(pts)
+    if n_orig < 3:
+        return pts
+
+    max_n = n_orig if METRIC_MAX_POINTS is None else int(min(n_orig, max(MIN_POINTS, METRIC_MAX_POINTS)))
+    area_orig = polygon_area(pts)
+    area_orig = max(area_orig, 1e-12)
+
+    for n in range(MIN_POINTS, max_n + 1):
+        curve = _build_export_curve_from_n(pts, n)
+        area_diff = abs(polygon_area(curve) - area_orig) / area_orig
+        h = hausdorff_polyline(pts, curve)
+        if area_diff <= AREA_DIFF_TOL and h <= HAUSDORFF_TOL:
+            return curve
+
+    # Fallback if thresholds are not met
+    strategy = METRIC_NO_MATCH_STRATEGY.lower().strip()
+    if strategy == "ratio":
+        return _build_export_curve_from_n(pts, n_target_from_basic_policy(n_orig, "ratio"))
+    if strategy == "fixed_points":
+        return _build_export_curve_from_n(pts, n_target_from_basic_policy(n_orig, "fixed_points"))
+    # default: keep most points allowed in the search range
+    return _build_export_curve_from_n(pts, max_n)
+
+
+def sample_contour_for_export(xy: np.ndarray) -> np.ndarray:
+    policy = POINT_POLICY.lower().strip()
+    if policy in ("ratio", "fixed_points"):
+        n_target = n_target_from_basic_policy(len(xy), policy)
+        return _build_export_curve_from_n(xy, n_target)
+    if policy == "metric_threshold":
+        return _sample_by_metric_threshold(xy)
+    raise ValueError(f"Unknown POINT_POLICY: {POINT_POLICY}")
 
 
 def convert_rtstruct_to_model_xml():
@@ -526,6 +618,8 @@ def convert_rtstruct_to_model_xml():
     print(f"\nWrote model XML: {OUT_XML.resolve()}")
     print(
         f"Config: policy={POINT_POLICY}, ratio={RATIO}, fixed_points={FIXED_POINTS}, "
+        f"area_tol={AREA_DIFF_TOL}, haus_tol={HAUSDORFF_TOL}, metric_max_points={METRIC_MAX_POINTS}, "
+        f"metric_no_match={METRIC_NO_MATCH_STRATEGY}, "
         f"alpha={CURVATURE_ALPHA}, export_mode={EXPORT_MODE}, coord_mode={COORD_MODE}"
     )
 
