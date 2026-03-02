@@ -31,8 +31,8 @@ MIN_POINTS = 3
 CURVATURE_ALPHA = 5.0
 
 # Metric-threshold policy config (used when POINT_POLICY == "metric_threshold")
-AREA_DIFF_TOL = 0.1          # relative, e.g. 0.01 = 1%
-HAUSDORFF_TOL = 0.8           # mm
+AREA_DIFF_TOL = 0.2          # relative, e.g. 0.01 = 1%
+HAUSDORFF_TOL = 1.0           # mm
 METRIC_MAX_POINTS = None      # None => search up to original point count
 METRIC_NO_MATCH_STRATEGY = "max_points"  # "max_points" or "ratio" or "fixed_points"
 

@@ -1,163 +1,65 @@
-﻿# Weekly Report
+﻿# Weekly Report (2026-02-24 ~ 2026-03-02)
 
-Hello everyone,
+This week I focused on `src/rtstruct_to_model_xml_adaptive.py`: converting RTSTRUCT ROI contours into a Fusion-like `model.xml`, and adaptively reducing the number of points per contour while keeping shape error under control.
 
-This week I worked on **RTSTRUCT contour point compression** and **shape fidelity evaluation**.
+## 1. Goals
 
-## Goal
+- Read closed contour points per ROI slice from RTSTRUCT
+- Convert contour points into a Fusion-like coordinate system (to align with the downstream model import logic)
+- Compress points for each contour (reduce/control point count) while constraining shape error with interpretable metrics
+- Output `outputs_model_xml_test/model.xml` for local import/inspection
 
-The goal is to:
+## 2. Key Implementation Notes (`rtstruct_to_model_xml_adaptive.py`)
 
-- reduce contour points for each slice of an ROI (here: `Prostate`)
-- keep the contour shape almost unchanged
-- make later steps faster (storage, rendering, computation)
-- use clear metrics to keep error under control
+### 2.1 Three point-count policies (`POINT_POLICY`)
 
-## 1. Problem Definition and Metrics
+- `ratio`: keep a ratio of points (`n = round(n_orig * RATIO)`)
+- `fixed_points`: fixed number of points (`FIXED_POINTS`)
+- `metric_threshold`: automatically search for the minimum `n` that satisfies metric thresholds (main focus this week)
 
-The data is one ROI contour from RTSTRUCT. Each slice has one closed contour, and each contour usually has many points.
+### 2.2 Metric-threshold search (`metric_threshold`)
 
-I use two metrics to define "shape fidelity":
+For each contour, increase `n` starting from `n = MIN_POINTS`:
 
-### Area Relative Error
+- Use curvature-weighted adaptive resampling to generate `n` points (denser around bends)
+- Compute, against the original contour:
+  - relative area error `AREA_DIFF_TOL`
+  - Hausdorff distance (mm) `HAUSDORFF_TOL`
+- Return the first `n` that satisfies both thresholds
+- If no `n` satisfies the thresholds, fall back based on `METRIC_NO_MATCH_STRATEGY` (ratio / fixed / max_points)
 
-- use the original contour area as the reference
-- compare the area change (%) after simplification / fitting
-- this keeps the **overall size** stable
+### 2.3 Optional exported curve form (`EXPORT_MODE`)
 
-### Hausdorff Distance (mm)
+- `adaptive_raw`: export the sampled control polyline directly
+- `adaptive_fit_dense`: sample control points first, then fit a closed B-spline and export a dense curve (for smoother contours)
 
-- measure the worst-case distance between two contours
-- this is very sensitive to local shape change
-- it shows the **largest boundary error**
-- this keeps the boundary from moving too far in one local region
+### 2.4 Fusion-like coordinate conversion (`COORD_MODE="fusion_like"`)
 
-## 2. File 1: Adaptive Sampling + Find Minimum Points per Slice (Baseline)
+- Locate the corresponding slice via the contour’s `ReferencedSOPInstanceUID`
+- Use DICOM `IOP/IPP/PixelSpacing` to map physical coordinates to pixel indices, then to Fusion-like world coordinates
+- Use a Fusion-like repositioned world origin (with `FUSION_ORIGIN_*_OFFSET`)
 
-The first script is a baseline.
+## 3. Results (two threshold settings)
 
-### Method
+The generated shapes under the two settings are very similar. I am still tuning the algorithm details and threshold values, and need to validate stability across more ROIs/slices.
 
-- read RTSTRUCT and get contour points for each slice of the target ROI
-- for each slice, start from `n = 3` points and increase `n`
-- use adaptive sampling to resample the original contour to `n` points
-- adaptive rule: more points at bends, fewer points on straight parts
-- compute area error and Hausdorff distance
-- the first `n` that passes thresholds is the minimum point count for that slice
-- take the maximum of all slice minimums as the global minimum point count for the whole RTSTRUCT
+### 3.1 Setting A
 
-### Value
+- `POINT_POLICY = "metric_threshold"`
+- `AREA_DIFF_TOL = 0.1`
+- `HAUSDORFF_TOL = 0.8`
 
-This gives a clear answer to:
+![metric_threshold (AREA_DIFF_TOL=0.1, HAUSDORFF_TOL=0.8)](image.png)
 
-- "What is the minimum point count we can use?"
+### 3.2 Setting B
 
-But this version is still mainly an **algorithm check**.
+- `POINT_POLICY = "metric_threshold"`
+- `AREA_DIFF_TOL = 0.2`
+- `HAUSDORFF_TOL = 1.0`
 
-## 3. File 2: Add Closed B-spline Fitting (Polyline to Smooth Curve)
+![metric_threshold (AREA_DIFF_TOL=0.2, HAUSDORFF_TOL=1.0)](<image copy.png>)
 
-The second script is an upgrade.
+## 4. Next Week Plan
 
-Before, the result was only an **n-point polyline**.
-In real use, we often want a contour that is smoother and easier to render.
-
-### New Two-Step Flow
-
-1. sample `n` points as control points (`reduced points`)
-2. fit a **closed periodic B-spline** (`splprep(per=True)`) and sample a dense curve for evaluation
-
-So the evaluation target changes from:
-
-- simplified polyline
-
-to:
-
-- fitted smooth closed curve
-
-### Value
-
-Now we are not only looking for:
-
-- "a polyline with fewer points"
-
-We are looking for:
-
-- "fewer control points + a smooth fitted closed curve + controllable error"
-
-This is closer to real use.
-
-## 4. File 3: Ratio Experiment Framework (Equal Arc-Length Sampling + Raw vs Fit)
-
-The third script is a full experiment framework.
-
-The main question is no longer "minimum `n`".
-The question is:
-
-- if we fix a compression ratio (for example 3%, 4%, 5% of original points), how do the errors change?
-
-### Method
-
-For each ratio (`0.03`, `0.04`, `0.05`, `0.06`, `0.08`):
-
-- loop over all slices
-- set target points: `n_target = round(n_orig * ratio)`
-- use **equal arc-length sampling** to get `raw_simp`
-- evaluate `raw`: area error + Hausdorff
-- fit `raw_simp` with B-spline and get `fitted_dense`
-- evaluate `fit`: area error + Hausdorff
-
-### Outputs
-
-- per-slice metric CSV files (good for later statistics)
-- per-slice comparison plots (`orig / raw / fit` in one figure, with errors in the title)
-
-### Value
-
-This turns the work from a single algorithm result into a **repeatable comparison experiment**.
-It also makes it easy to see:
-
-- under the same ratio, which is better: `raw` polyline or `fit` curve
-
-## 5. File 4: Ratio Experiment with Curvature-Weighted Sampling (Better at Bends)
-
-The fourth script keeps the same experiment framework as File 3, but changes the sampling method:
-
-- from **equal arc-length sampling**
-- to **curvature-weighted sampling**
-
-### Why
-
-Equal arc-length sampling gives similar point counts to straight parts and bend parts.
-But large shape error often comes from:
-
-- bends
-- sharp corners
-- high-curvature regions
-
-### Curvature-Weighted Idea
-
-- compute a discrete curvature (turn angle) at each vertex
-- map curvature to edge weight:
-  - `weight = seg_len * (1 + alpha * edge_curv)`
-- sample uniformly on the **weighted perimeter**
-- result: more points are placed near bends automatically
-
-### Recorded Metadata
-
-- `sampling_method = curvature_weighted`
-- `curvature_alpha = 5.0`
-
-### Value
-
-With the same ratio, this method should help control Hausdorff better (especially the worst local error), and it is often better for later spline fitting because more control points are placed at key shape locations.
-
-## 6. Current Weekly Summary 
-
-So far, I finished:
-
-- algorithm validation for "find minimum point count" (File 1)
-- a more practical pipeline with fitted smooth curves (File 2)
-- a ratio-scan evaluation system with plots and CSV outputs (Files 3 and 4)
-- a comparison framework for two sampling methods:
-  - equal arc-length
-  - curvature-weighted
+- Expand to more cases (different ROIs and shape complexities) and summarize the distribution of “minimum `n` that meets thresholds”
+- Systematically sweep `AREA_DIFF_TOL / HAUSDORFF_TOL / CURVATURE_ALPHA / SPLINE_SMOOTH` to find a more robust default parameter set

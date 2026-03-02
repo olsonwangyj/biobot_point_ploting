@@ -1,174 +1,107 @@
-﻿# Supplement: Key Algorithm Notes (Simple Explanation)
+﻿# Supplement: Key Algorithm Notes for `rtstruct_to_model_xml_adaptive.py`
 
-This is a short explanation of the key algorithms used in the RTSTRUCT contour work.
+This document supplements this week’s work in `src/rtstruct_to_model_xml_adaptive.py`, focusing on: adaptive point sampling, metric-threshold search (auto-finding the minimum point count), and Fusion-like coordinate conversion.
 
-## 1. Read Contour Points from RTSTRUCT (Data Input)
+## 0. End-to-end pipeline (RTSTRUCT -> model.xml)
 
-### Steps
+1. Read RTSTRUCT: `load_rtstruct_rois(RTSTRUCT_PATH)`
+2. Read the referenced image series (when `COORD_MODE="fusion_like"`): `collect_image_slices(IMAGE_ROOT)`, and build a `SOPInstanceUID -> slice index/info` mapping
+3. For each ROI contour:
+   - `contour_xyz_to_model_xy_worldz()`: map contour physical coordinates `(x, y, z)` to model coordinates `(x, y)` + `world_z`
+   - `sample_contour_for_export()`: compress/fit contour points based on the selected policy
+   - Write XML: `build_model_xml()`, output to `outputs_model_xml_test/model.xml`
 
-- use `pydicom.dcmread` to read the RTSTRUCT file
-- in `StructureSetROISequence`, find the target `ROINumber` by `ROIName`
-- in `ROIContourSequence`, find the contour set by `ReferencedROINumber`
-- each `ContourSequence` has `ContourData`
-- reshape `ContourData` to `(-1, 3)` to get `(x, y, z)` points
-- use `xy` as 2D contour points
-- use `z` to sort slices
-- compute area with `polygon_area`
-- remove very small noisy contours (`area < MIN_AREA`)
+## 1. `POINT_POLICY="metric_threshold"`: auto-search the minimum point count
 
-## 2. Two Evaluation Metrics: Area Error + Hausdorff
+Goal: for each contour, automatically find the minimum `n` such that the exported curve satisfies:
 
-## 2.1 Area Error
+- relative area error: `area_diff <= AREA_DIFF_TOL`
+- Hausdorff distance (mm): `hausdorff <= HAUSDORFF_TOL`
 
-Area is computed with the **shoelace formula**:
+Main implementation: `_sample_by_metric_threshold(xy)`
 
-- `dot(x, roll(y)) - dot(y, roll(x))`
+### 1.1 Search procedure
 
-This is the standard polygon area formula.
-The contour points only need to be in order.
+- Input: original 2D contour points `xy` (ordered points of a closed contour)
+- Pre-compute: `area_orig = polygon_area(xy)` (with `max(area_orig, 1e-12)` to avoid divide-by-zero)
+- Search upper bound:
+  - `max_n = n_orig` (default)
+  - if `METRIC_MAX_POINTS` is set: `max_n = min(n_orig, METRIC_MAX_POINTS)`
+- Try `n = MIN_POINTS ... max_n`:
+  - `curve = _build_export_curve_from_n(xy, n)`
+  - `area_diff = abs(area(curve) - area_orig) / area_orig`
+  - `h = hausdorff_polyline(xy, curve)`
+  - if both `area_diff` and `h` meet thresholds, return `curve`
 
-## 2.2 Hausdorff Distance (Point-to-Polyline Version)
+### 1.2 If no `n` meets the thresholds
 
-I use a **point-to-polyline** Hausdorff distance, not only point-to-point distance.
-This is more stable.
+Fallback is controlled by `METRIC_NO_MATCH_STRATEGY`:
 
-### Idea
+- `ratio`: fall back to `n = round(n_orig * RATIO)`
+- `fixed_points`: fall back to `n = FIXED_POINTS`
+- `max_points` (default): return the curve using the largest `n` in the search range (usually “keep as many points as allowed”)
 
-- treat one contour as many line segments (after `_close_polyline`)
-- for each point `p`, compute the shortest distance to all segments
-- take the minimum distance for this point
-- one-way Hausdorff = max of these minimum distances
-- symmetric Hausdorff = `max(h(A, B), h(B, A))`
+## 2. Adaptive resampling: `resample_adaptive_polyline()` (curvature-weighted)
 
-### Core Math (Point to Segment)
+Purpose: under the same point budget, allocate more samples to higher-curvature regions (typically easier to control Hausdorff).
 
-For segment `A -> B` and point `p`, use projection:
+Key steps:
 
-```text
-t = ((p - A) · (B - A)) / ||B - A||^2
-```
+1. Compute discrete curvature (turn angle) at each vertex `theta_i`: `discrete_curvature(points)`
+2. Map vertex curvature to edge curvature (average of the two adjacent vertices):
+   - `edge_curv_i = 0.5 * (theta_i + theta_{i+1})`
+3. Edge weight (curvature-weighted “perimeter”):
+   - `weight_i = seg_len_i * (1 + CURVATURE_ALPHA * edge_curv_i)`
+4. Normalize cumulative weights `cum_w` to `[0, 1)`, then for `targets = linspace(0, 1, n, endpoint=False)` do `searchsorted + linear interpolation` to obtain `n` sampled points
 
-Then clip `t` to `[0, 1]` so the closest point stays on the segment.
+Intuition: where `edge_curv` is larger, the edge gets a larger interval on `[0, 1)`, so sampling is denser around bends automatically.
 
-```text
-proj = A + t * (B - A)
-```
+## 3. Exported curve form: `EXPORT_MODE`
 
-Distance is:
+The exported curve is determined by `_build_export_curve_from_n()`:
 
-```text
-||p - proj||
-```
+- `EXPORT_MODE="adaptive_raw"`: export the points from `resample_adaptive_polyline()` directly (control polyline)
+- `EXPORT_MODE="adaptive_fit_dense"`: sample control points first, then apply `fit_closed_bspline_curve()` and export `FIT_DENSE_POINTS` dense points (smoother)
 
-In code, `_point_to_segments_min_dist` uses vectorization and chunking to avoid high memory use.
+Note: in `metric_threshold` search, both area error and Hausdorff are computed on the **final exported curve**, so `EXPORT_MODE` directly affects the minimum `n` found.
 
-## 3. Sampling Method 1: Equal Arc-Length Resampling (Baseline)
+## 4. Hausdorff distance implementation (point-to-segment)
 
-In the ratio experiment, `resample_closed_equal_distance` is the baseline.
+The script implements a point-to-segment Hausdorff distance (`hausdorff_polyline(a, b)`), rather than point-to-point:
 
-### Steps
+- For each point in A, compute the minimum distance to all segments in B
+- One-way Hausdorff = the maximum of these minimum distances
+- Symmetric Hausdorff = `max(h(A, B), h(B, A))`
 
-- close the contour
-- compute each edge length `seg_len`
-- build cumulative length `cum`
-- get total perimeter `total`
-- choose target positions with `linspace(0, total, n_out)`
-- for each target, find which edge it falls on
-- use linear interpolation on that edge
+This is typically more stable when the two contours have different sampling densities.
 
-This means points are placed uniformly along the polyline perimeter.
-The result is `raw_simp`.
+## 5. Fusion-like coordinate conversion (`COORD_MODE="fusion_like"`)
 
-## 4. Sampling Method 2: Curvature-Weighted Resampling (Key Optimization)
+### 5.1 Collecting the image series: `collect_image_slices()`
 
-In another ratio experiment, I upgrade equal arc-length sampling to `resample_closed_curvature_weighted`.
+- Traverse `IMAGE_ROOT` for `*.dcm`, filtering out RTSTRUCT
+- Read per-slice metadata: `SOPInstanceUID / IOP / IPP / PixelSpacing / Rows / Columns`
+- Compute slice normal with `normal = cross(row_dir, col_dir)` and sort by `dot(IPP, normal)`
+- Estimate slice spacing via the median of projected inter-slice distances (fallback to `SpacingBetweenSlices/SliceThickness`)
+- Optionally set `world_origin` using a Fusion-like repositioning method (including `FUSION_ORIGIN_Y_OFFSET / FUSION_ORIGIN_Z_OFFSET`)
 
-## 4.1 Step 1: Discrete Curvature / Turn Angle
+### 5.2 Converting contour points: `contour_xyz_to_model_xy_worldz()`
 
-For each vertex `P_i`, use the two edge vectors:
+- Find the slice index using the contour’s `ReferencedSOPInstanceUID`
+- `transform_physical_to_pixel_index()` projects a physical point to a pixel index (approximately ITK-style integer index)
+- Convert to Fusion-like world coordinates:
+  - `x = col_idx * sx + origin_x`
+  - `y = (H - row_idx - 1) * sy + origin_y` (y-axis flip)
+  - `world_z = (num_slices - slice_idx - 1) * slice_spacing + origin_z`
 
-```text
-v1 = P_i - P_{i-1}
-v2 = P_{i+1} - P_i
-```
+## 6. Tuning and visualization notes (this week)
 
-Compute the angle using dot product:
+The generated shapes under the two settings are very similar. I am still tuning thresholds/sampling behavior across different contours.
 
-```text
-cos(theta_i) = (v1 · v2) / (||v1|| ||v2||)
-theta_i = arccos(...)
-```
+- Setting A: `POINT_POLICY="metric_threshold"`, `AREA_DIFF_TOL=0.1`, `HAUSDORFF_TOL=0.8`
 
-This is the `discrete_curvature` used in code.
+![A: metric_threshold (0.1, 0.8)](image.png)
 
-## 4.2 Step 2: Map Vertex Curvature to Edge Curvature
+- Setting B: `POINT_POLICY="metric_threshold"`, `AREA_DIFF_TOL=0.2`, `HAUSDORFF_TOL=1.0`
 
-For edge `i`, use the average curvature of its two end vertices:
-
-```text
-c_i = (theta_i + theta_{i+1}) / 2
-```
-
-## 4.3 Step 3: Build Weighted Edge Length
-
-```text
-w_i = L_i * (1 + alpha * c_i)
-```
-
-- `L_i` is edge length
-- `alpha` controls how strong the extra sampling is at bends
-
-## 4.4 Step 4: Weighted Parameterization with `cum_w`
-
-Normalize cumulative weights to `[0, 1]`:
-
-```text
-cum_w[k] = (sum of weights before edge k) / (sum of all weights)
-```
-
-Then:
-
-- sample target values uniformly on `[0, 1)`
-- use `searchsorted` to find which edge each target belongs to
-- interpolate on that edge
-
-### Effect
-
-Edges with larger weight (usually bends / high-curvature regions) take a larger interval in `[0, 1]`, so they get more sampled points.
-
-## 5. Closed B-spline Fitting: From Few-Point Polyline to Smooth Closed Curve
-
-After point compression, I use `splprep(per=True)` for **closed periodic B-spline fitting**.
-
-### Steps
-
-- input control points (from `raw_simp` or curvature-weighted sampled points)
-- set `per=True` to enforce periodic fitting
-  - the curve is closed
-  - the derivative is also continuous at the closing point
-- use `s = SPLINE_SMOOTH` to control fit vs smoothness
-  - larger `s` means smoother curve but more deviation from control points
-- get `tck` (knots + coefficients + degree)
-- use `splev` to sample `FIT_DENSE_POINTS` points on the fitted curve
-- the result is a dense polyline `fitted_dense`
-
-### Important Evaluation Rule
-
-Area error and Hausdorff are both computed on `fitted_dense`, because this dense curve is the final curve used later, not the control-point polyline.
-
-## 6. Why Use Ratio Scan (How to Explain Results)
-
-I do not only report one minimum `n`.
-I scan multiple ratios (3% to 8%).
-
-For each ratio, I output:
-
-- per-slice `raw/fit` metrics
-- comparison plots
-- CSV files
-
-This makes it easy to see:
-
-- how error changes when compression becomes stronger
-- whether curvature-weighted sampling controls Hausdorff better than equal arc-length sampling (especially at bends)
-- whether spline smoothing improves or worsens error (depends on `s` and shape details)
+![B: metric_threshold (0.2, 1.0)](<image copy.png>)
