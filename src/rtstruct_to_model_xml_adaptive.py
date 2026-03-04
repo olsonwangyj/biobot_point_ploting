@@ -37,6 +37,7 @@ AREA_DIFF_TOL = 0.2          # relative, e.g. 0.01 = 1%
 HAUSDORFF_TOL = 1.0           # mm
 METRIC_MAX_POINTS = None      # None => search up to original point count
 METRIC_NO_MATCH_STRATEGY = "max_points"  # "max_points" or "ratio" or "fixed_points"
+METRIC_EVAL_MODE = "adaptive_fit_dense"  # "adaptive_raw" or "adaptive_fit_dense" or "match_export"
 
 # Optional: export fitted dense curve instead of sampled control polygon
 EXPORT_MODE = "adaptive_raw"  # "adaptive_raw" or "adaptive_fit_dense"
@@ -479,11 +480,25 @@ def n_target_from_basic_policy(n_orig: int, policy: str | None = None) -> int:
     raise ValueError(f"Unknown basic policy: {p}")
 
 
-def _build_export_curve_from_n(xy: np.ndarray, n_target: int) -> np.ndarray:
-    sampled = resample_adaptive_polyline(xy, n_target, alpha=CURVATURE_ALPHA)
-    if EXPORT_MODE == "adaptive_fit_dense":
+def _resolve_curve_mode(mode: str, allow_match_export: bool = False) -> str:
+    m = mode.lower().strip()
+    if allow_match_export and m == "match_export":
+        m = EXPORT_MODE.lower().strip()
+    if m not in ("adaptive_raw", "adaptive_fit_dense"):
+        raise ValueError(f"Unknown curve mode: {mode}")
+    return m
+
+
+def _curve_from_sampled(sampled: np.ndarray, mode: str) -> np.ndarray:
+    m = _resolve_curve_mode(mode)
+    if m == "adaptive_fit_dense":
         return fit_closed_bspline_curve(sampled, smooth=SPLINE_SMOOTH, n_fit=FIT_DENSE_POINTS)
     return sampled
+
+
+def _build_export_curve_from_n(xy: np.ndarray, n_target: int) -> np.ndarray:
+    sampled = resample_adaptive_polyline(xy, n_target, alpha=CURVATURE_ALPHA)
+    return _curve_from_sampled(sampled, EXPORT_MODE)
 
 
 def _sample_by_metric_threshold(xy: np.ndarray) -> np.ndarray:
@@ -495,13 +510,15 @@ def _sample_by_metric_threshold(xy: np.ndarray) -> np.ndarray:
     max_n = n_orig if METRIC_MAX_POINTS is None else int(min(n_orig, max(MIN_POINTS, METRIC_MAX_POINTS)))
     area_orig = polygon_area(pts)
     area_orig = max(area_orig, 1e-12)
+    eval_mode = _resolve_curve_mode(METRIC_EVAL_MODE, allow_match_export=True)
 
     for n in range(MIN_POINTS, max_n + 1):
-        curve = _build_export_curve_from_n(pts, n)
-        area_diff = abs(polygon_area(curve) - area_orig) / area_orig
-        h = hausdorff_polyline(pts, curve)
+        sampled = resample_adaptive_polyline(pts, n, alpha=CURVATURE_ALPHA)
+        eval_curve = _curve_from_sampled(sampled, eval_mode)
+        area_diff = abs(polygon_area(eval_curve) - area_orig) / area_orig
+        h = hausdorff_polyline(pts, eval_curve)
         if area_diff <= AREA_DIFF_TOL and h <= HAUSDORFF_TOL:
-            return curve
+            return _curve_from_sampled(sampled, EXPORT_MODE)
 
     # Fallback if thresholds are not met
     strategy = METRIC_NO_MATCH_STRATEGY.lower().strip()
@@ -621,7 +638,7 @@ def convert_rtstruct_to_model_xml():
     print(
         f"Config: policy={POINT_POLICY}, ratio={RATIO}, fixed_points={FIXED_POINTS}, "
         f"area_tol={AREA_DIFF_TOL}, haus_tol={HAUSDORFF_TOL}, metric_max_points={METRIC_MAX_POINTS}, "
-        f"metric_no_match={METRIC_NO_MATCH_STRATEGY}, "
+        f"metric_no_match={METRIC_NO_MATCH_STRATEGY}, metric_eval_mode={METRIC_EVAL_MODE}, "
         f"alpha={CURVATURE_ALPHA}, export_mode={EXPORT_MODE}, coord_mode={COORD_MODE}"
     )
 
