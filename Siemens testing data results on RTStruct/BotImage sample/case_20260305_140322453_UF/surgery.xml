@@ -1,0 +1,22 @@
+<surgery>
+    <file-version>1</file-version>
+    <id>case_20260305_140322453_UF</id>
+    <date>2026-03-05</date>
+    <start-time>14:03:22</start-time>
+    <end-time></end-time>
+    <application>
+        <name>UroFusion</name>
+        <version>5.4.0.820</version>
+    </application>
+    <surgeon>
+        <name>James</name>
+        <clinic>BBS</clinic>
+    </surgeon>
+    <patient>
+        <name>RTS Test-BotImage</name>
+        <id>RTST0001</id>
+        <dob>1970-01-07</dob>
+        <gender>Male</gender>
+        <nationality>India</nationality>
+    </patient>
+</surgery>

@@ -33,16 +33,28 @@ MIN_POINTS = 3
 CURVATURE_ALPHA = 5.0
 
 # Metric-threshold policy config (used when POINT_POLICY == "metric_threshold")
-AREA_DIFF_TOL = 0.2          # relative, e.g. 0.01 = 1%
-HAUSDORFF_TOL = 1.0           # mm
+AREA_DIFF_TOL = 0.01         # relative, e.g. 0.01 = 1%
+H95_TOL = 0.5                # mm, primary threshold
+HMAX_TOL = 1.2               # mm, loose upper bound for spikes
 METRIC_MAX_POINTS = None      # None => search up to original point count
 METRIC_NO_MATCH_STRATEGY = "max_points"  # "max_points" or "ratio" or "fixed_points"
-METRIC_EVAL_MODE = "adaptive_fit_dense"  # "adaptive_raw" or "adaptive_fit_dense" or "match_export"
+METRIC_EVAL_MODE = "adaptive_fit_dense"  # fixed for metric policy
+METRIC_ALPHA_GRID = [1, 2, 3, 4, 5, 6, 8, 10]
+METRIC_SMOOTH_GRID = [0.0, 0.01, 0.03, 0.05, 0.1, 0.2, 0.3]
+ORIG_REF_DENSE_POINTS = 3000
+
+# Optional: corner guard for more aggressive point compression.
+# Force-keep high-curvature points in sampled control points.
+CORNER_GUARD_ENABLE = True
+CORNER_GUARD_RATIO = 0.2      # anchor count ~= round(n * ratio)
+CORNER_GUARD_K_MIN = 0        # 0 means no hard minimum
+CORNER_GUARD_K_MAX = 12
+CORNER_GUARD_MIN_GAP = 2      # min cyclic index gap between anchors
 
 # Optional: export fitted dense curve instead of sampled control polygon
 EXPORT_MODE = "adaptive_raw"  # "adaptive_raw" or "adaptive_fit_dense"
 SPLINE_SMOOTH = 0.2
-FIT_DENSE_POINTS = 200
+FIT_DENSE_POINTS = 1000
 
 # Keep only the largest contour on the same slice for the same ROI (Fusion-like behavior)
 KEEP_LARGEST_CONTOUR_PER_SLICE = True
@@ -85,6 +97,35 @@ def _close_polyline(points: np.ndarray) -> np.ndarray:
     if np.allclose(points[0], points[-1]):
         return points
     return np.vstack([points, points[0]])
+
+
+def resample_closed_equal_distance(points: np.ndarray, n_out: int) -> np.ndarray:
+    pts = _close_polyline(np.asarray(points, dtype=float))
+    n_out = int(max(MIN_POINTS, n_out))
+    if len(pts) <= 1:
+        return np.repeat(pts[:1], n_out, axis=0) if len(pts) else np.empty((0, 2), dtype=float)
+
+    seg = np.diff(pts, axis=0)
+    seg_len = np.linalg.norm(seg, axis=1)
+    cum = np.concatenate([[0.0], np.cumsum(seg_len)])
+    total = cum[-1]
+    if total <= 1e-12:
+        return np.repeat(pts[:1], n_out, axis=0)
+
+    target = np.linspace(0.0, total, n_out, endpoint=False)
+    out = np.empty((n_out, 2), dtype=float)
+
+    j = 0
+    for i, t in enumerate(target):
+        while j < len(seg_len) - 1 and cum[j + 1] < t:
+            j += 1
+        d = seg_len[j]
+        if d <= 1e-12:
+            out[i] = pts[j]
+        else:
+            a = (t - cum[j]) / d
+            out[i] = (1.0 - a) * pts[j] + a * pts[j + 1]
+    return out
 
 
 def _point_to_segments_min_dist(
@@ -133,6 +174,27 @@ def hausdorff_polyline(a_points: np.ndarray, b_points: np.ndarray) -> float:
     return float(max(np.max(da), np.max(db)))
 
 
+def hausdorff_dual_metrics(a_points: np.ndarray, b_points: np.ndarray) -> tuple[float, float]:
+    a = np.asarray(a_points, dtype=float)
+    b = np.asarray(b_points, dtype=float)
+    if len(a) == 0 or len(b) == 0:
+        return float("nan"), float("nan")
+
+    a_closed = _close_polyline(a)
+    b_closed = _close_polyline(b)
+    a_seg0, a_seg1 = a_closed[:-1], a_closed[1:]
+    b_seg0, b_seg1 = b_closed[:-1], b_closed[1:]
+
+    da = _point_to_segments_min_dist(a, b_seg0, b_seg1)
+    db = _point_to_segments_min_dist(b, a_seg0, a_seg1)
+    all_d = np.concatenate([da, db]) if len(da) and len(db) else np.array([], dtype=float)
+    if len(all_d) == 0:
+        return float("nan"), float("nan")
+    hd95 = float(np.percentile(all_d, 95))
+    hd_max = float(max(np.max(da), np.max(db)))
+    return hd95, hd_max
+
+
 def discrete_curvature(points: np.ndarray) -> np.ndarray:
     pts = np.asarray(points, dtype=float)
     n = len(pts)
@@ -148,14 +210,42 @@ def discrete_curvature(points: np.ndarray) -> np.ndarray:
     return np.arccos(np.clip(cos, -1.0, 1.0))
 
 
-def resample_adaptive_polyline(points: np.ndarray, n: int, alpha: float = 5.0) -> np.ndarray:
-    pts0 = np.asarray(points, dtype=float)
-    n = int(max(MIN_POINTS, n))
-    if len(pts0) == 0:
-        return np.empty((0, 2), dtype=float)
-    if len(pts0) == 1:
-        return np.repeat(pts0[:1], n, axis=0)
+def _cyclic_index_distance(i: int, j: int, n: int) -> int:
+    d = abs(int(i) - int(j))
+    return int(min(d, n - d))
 
+
+def pick_top_curvature_indices(points: np.ndarray, k: int, min_gap: int = 2) -> np.ndarray:
+    pts = np.asarray(points, dtype=float)
+    n = len(pts)
+    k = int(max(0, min(k, n)))
+    if n == 0 or k == 0:
+        return np.array([], dtype=int)
+
+    curv = discrete_curvature(pts)
+    order = np.argsort(-curv)
+    selected: list[int] = []
+
+    for idx in order:
+        idx_i = int(idx)
+        if all(_cyclic_index_distance(idx_i, s, n) > int(min_gap) for s in selected):
+            selected.append(idx_i)
+            if len(selected) >= k:
+                break
+
+    if len(selected) < k:
+        for idx in order:
+            idx_i = int(idx)
+            if idx_i not in selected:
+                selected.append(idx_i)
+                if len(selected) >= k:
+                    break
+
+    return np.array(sorted(selected), dtype=int)
+
+
+def _weighted_curve_components(points: np.ndarray, alpha: float):
+    pts0 = np.asarray(points, dtype=float)
     n_total = len(pts0)
     pts = np.vstack([pts0, pts0[0]])
     seg_len = np.linalg.norm(np.diff(pts, axis=0), axis=1)
@@ -170,21 +260,72 @@ def resample_adaptive_polyline(points: np.ndarray, n: int, alpha: float = 5.0) -
     cum_w = np.concatenate([[0.0], np.cumsum(weight)])
     total_w = cum_w[-1]
     if total_w <= 1e-12:
-        return np.repeat(pts0[:1], n, axis=0)
+        return pts, None
     cum_w /= total_w
 
-    targets = np.linspace(0.0, 1.0, n, endpoint=False)
-    out = np.empty((n, 2), dtype=float)
+    return pts, cum_w
 
-    for i, t in enumerate(targets):
-        j = np.searchsorted(cum_w, t, side="right") - 1
-        j = int(np.clip(j, 0, n_total - 1))
-        denom = cum_w[j + 1] - cum_w[j]
-        if denom <= 1e-12:
-            out[i] = pts[j]
-        else:
-            local = (t - cum_w[j]) / denom
-            out[i] = (1.0 - local) * pts[j] + local * pts[j + 1]
+
+def _sample_point_by_param(pts_closed: np.ndarray, cum_w: np.ndarray, t: float) -> np.ndarray:
+    n_total = len(pts_closed) - 1
+    j = np.searchsorted(cum_w, t, side="right") - 1
+    j = int(np.clip(j, 0, n_total - 1))
+    denom = cum_w[j + 1] - cum_w[j]
+    if denom <= 1e-12:
+        return pts_closed[j]
+    local = (t - cum_w[j]) / denom
+    return (1.0 - local) * pts_closed[j] + local * pts_closed[j + 1]
+
+
+def _assign_anchor_targets(base_targets: np.ndarray, anchor_targets: np.ndarray) -> np.ndarray:
+    tgt = np.asarray(base_targets, dtype=float).copy()
+    if len(tgt) == 0 or len(anchor_targets) == 0:
+        return tgt
+
+    free_idx = set(range(len(tgt)))
+    for at in np.asarray(anchor_targets, dtype=float):
+        if not free_idx:
+            break
+        idxs = np.array(sorted(list(free_idx)), dtype=int)
+        d = np.abs(tgt[idxs] - at)
+        d = np.minimum(d, 1.0 - d)  # cyclic distance on [0,1)
+        pick = int(idxs[int(np.argmin(d))])
+        tgt[pick] = float(at)
+        free_idx.remove(pick)
+
+    tgt.sort()
+    return tgt
+
+
+def resample_adaptive_polyline(
+    points: np.ndarray,
+    n: int,
+    alpha: float = 5.0,
+    anchor_indices: np.ndarray | None = None,
+) -> np.ndarray:
+    pts0 = np.asarray(points, dtype=float)
+    n = int(max(MIN_POINTS, n))
+    if len(pts0) == 0:
+        return np.empty((0, 2), dtype=float)
+    if len(pts0) == 1:
+        return np.repeat(pts0[:1], n, axis=0)
+
+    pts, cum_w = _weighted_curve_components(pts0, alpha=float(alpha))
+    if cum_w is None:
+        return np.repeat(pts0[:1], n, axis=0)
+
+    targets = np.linspace(0.0, 1.0, n, endpoint=False)
+    if anchor_indices is not None and len(anchor_indices) > 0:
+        aidx = np.asarray(anchor_indices, dtype=int)
+        aidx = aidx[(aidx >= 0) & (aidx < len(pts0))]
+        if len(aidx) > 0:
+            aidx = np.unique(aidx)
+            if len(aidx) > n:
+                aidx = aidx[:n]
+            anchor_targets = cum_w[aidx]
+            targets = _assign_anchor_targets(targets, anchor_targets)
+
+    out = np.array([_sample_point_by_param(pts, cum_w, float(t)) for t in targets], dtype=float)
 
     return out
 
@@ -489,16 +630,104 @@ def _resolve_curve_mode(mode: str, allow_match_export: bool = False) -> str:
     return m
 
 
-def _curve_from_sampled(sampled: np.ndarray, mode: str) -> np.ndarray:
+def _curve_from_sampled(sampled: np.ndarray, mode: str, smooth_override: float | None = None) -> np.ndarray:
     m = _resolve_curve_mode(mode)
     if m == "adaptive_fit_dense":
-        return fit_closed_bspline_curve(sampled, smooth=SPLINE_SMOOTH, n_fit=FIT_DENSE_POINTS)
+        smooth = SPLINE_SMOOTH if smooth_override is None else float(smooth_override)
+        return fit_closed_bspline_curve(sampled, smooth=smooth, n_fit=FIT_DENSE_POINTS)
     return sampled
 
 
 def _build_export_curve_from_n(xy: np.ndarray, n_target: int) -> np.ndarray:
     sampled = resample_adaptive_polyline(xy, n_target, alpha=CURVATURE_ALPHA)
     return _curve_from_sampled(sampled, EXPORT_MODE)
+
+
+def _evaluate_fit_against_reference(
+    fit_dense: np.ndarray, orig_ref_dense: np.ndarray, area_ref: float
+) -> tuple[float, float, float]:
+    area_diff = abs(polygon_area(fit_dense) - area_ref) / max(area_ref, 1e-12)
+    hd95, hd_max = hausdorff_dual_metrics(orig_ref_dense, fit_dense)
+    return float(area_diff), float(hd95), float(hd_max)
+
+
+def _metric_score(area_diff: float, hd95: float, hd_max: float) -> float:
+    return (
+        area_diff / max(AREA_DIFF_TOL, 1e-12)
+        + hd95 / max(H95_TOL, 1e-12)
+        + hd_max / max(HMAX_TOL, 1e-12)
+    )
+
+
+def _corner_anchor_indices_for_n(points: np.ndarray, n: int) -> np.ndarray:
+    if not CORNER_GUARD_ENABLE:
+        return np.array([], dtype=int)
+    if n <= MIN_POINTS:
+        return np.array([], dtype=int)
+
+    k = int(round(float(n) * float(CORNER_GUARD_RATIO)))
+    k = max(k, int(CORNER_GUARD_K_MIN))
+    k = min(k, int(CORNER_GUARD_K_MAX))
+    k = min(k, max(0, int(n) - 1))
+    k = min(k, len(points))
+    if k <= 0:
+        return np.array([], dtype=int)
+
+    return pick_top_curvature_indices(points, k=k, min_gap=int(CORNER_GUARD_MIN_GAP))
+
+
+def _search_best_params_for_n(
+    pts: np.ndarray, n: int, orig_ref_dense: np.ndarray, area_ref: float
+) -> dict:
+    best_any = {
+        "score": float("inf"),
+        "passed": False,
+        "sampled": None,
+        "fit_dense": None,
+        "alpha": None,
+        "smooth": None,
+        "area_diff": float("inf"),
+        "hd95": float("inf"),
+        "hd_max": float("inf"),
+        "n_anchor": 0,
+    }
+    best_pass = None
+    anchor_indices = _corner_anchor_indices_for_n(pts, n)
+
+    for alpha in METRIC_ALPHA_GRID:
+        sampled = resample_adaptive_polyline(pts, n, alpha=float(alpha), anchor_indices=anchor_indices)
+        if len(sampled) < 3:
+            continue
+        for smooth in METRIC_SMOOTH_GRID:
+            fit_dense = fit_closed_bspline_curve(sampled, smooth=float(smooth), n_fit=FIT_DENSE_POINTS)
+            if len(fit_dense) < 3:
+                continue
+            area_diff, hd95, hd_max = _evaluate_fit_against_reference(fit_dense, orig_ref_dense, area_ref)
+            if any(math.isnan(v) for v in (area_diff, hd95, hd_max)):
+                continue
+
+            passed = (area_diff <= AREA_DIFF_TOL) and (hd95 <= H95_TOL) and (hd_max <= HMAX_TOL)
+            score = _metric_score(area_diff, hd95, hd_max)
+            candidate = {
+                "score": score,
+                "sampled": sampled,
+                "fit_dense": fit_dense,
+                "alpha": float(alpha),
+                "smooth": float(smooth),
+                "area_diff": area_diff,
+                "hd95": hd95,
+                "hd_max": hd_max,
+                "passed": bool(passed),
+                "n_anchor": int(len(anchor_indices)),
+            }
+
+            if score < best_any["score"]:
+                best_any.update(candidate)
+
+            if passed and (best_pass is None or score < best_pass["score"]):
+                best_pass = dict(candidate)
+
+    return best_pass if best_pass is not None else best_any
 
 
 def _sample_by_metric_threshold(xy: np.ndarray) -> np.ndarray:
@@ -508,26 +737,56 @@ def _sample_by_metric_threshold(xy: np.ndarray) -> np.ndarray:
         return pts
 
     max_n = n_orig if METRIC_MAX_POINTS is None else int(min(n_orig, max(MIN_POINTS, METRIC_MAX_POINTS)))
-    area_orig = polygon_area(pts)
-    area_orig = max(area_orig, 1e-12)
-    eval_mode = _resolve_curve_mode(METRIC_EVAL_MODE, allow_match_export=True)
+    orig_ref_dense = resample_closed_equal_distance(pts, ORIG_REF_DENSE_POINTS)
+    area_ref = max(polygon_area(orig_ref_dense), 1e-12)
+    eval_mode = _resolve_curve_mode(METRIC_EVAL_MODE, allow_match_export=False)
+    if eval_mode != "adaptive_fit_dense":
+        raise ValueError("METRIC_EVAL_MODE must be 'adaptive_fit_dense' for metric_threshold policy")
 
+    # Metric policy exports minimum control points by design.
+    export_mode = "adaptive_raw"
+
+    best_fail = None
     for n in range(MIN_POINTS, max_n + 1):
-        sampled = resample_adaptive_polyline(pts, n, alpha=CURVATURE_ALPHA)
-        eval_curve = _curve_from_sampled(sampled, eval_mode)
-        area_diff = abs(polygon_area(eval_curve) - area_orig) / area_orig
-        h = hausdorff_polyline(pts, eval_curve)
-        if area_diff <= AREA_DIFF_TOL and h <= HAUSDORFF_TOL:
-            return _curve_from_sampled(sampled, EXPORT_MODE)
+        result = _search_best_params_for_n(pts, n, orig_ref_dense, area_ref)
+        if result["sampled"] is None:
+            continue
+        if best_fail is None or result["score"] < best_fail["score"]:
+            best_fail = {**result, "n": n}
+        if result["passed"]:
+            print(
+                f"[metric_threshold] n={n} pass | alpha={result['alpha']}, smooth={result['smooth']}, "
+                f"area_diff={result['area_diff']:.4f}, hd95={result['hd95']:.4f}, hd_max={result['hd_max']:.4f}, "
+                f"anchors={result.get('n_anchor', 0)}"
+            )
+            return _curve_from_sampled(result["sampled"], export_mode)
 
     # Fallback if thresholds are not met
     strategy = METRIC_NO_MATCH_STRATEGY.lower().strip()
     if strategy == "ratio":
-        return _build_export_curve_from_n(pts, n_target_from_basic_policy(n_orig, "ratio"))
-    if strategy == "fixed_points":
-        return _build_export_curve_from_n(pts, n_target_from_basic_policy(n_orig, "fixed_points"))
-    # default: keep most points allowed in the search range
-    return _build_export_curve_from_n(pts, max_n)
+        fallback_n = n_target_from_basic_policy(n_orig, "ratio")
+    elif strategy == "fixed_points":
+        fallback_n = n_target_from_basic_policy(n_orig, "fixed_points")
+    elif strategy in ("max_points", "max_n"):
+        fallback_n = max_n
+    else:
+        raise ValueError(
+            "METRIC_NO_MATCH_STRATEGY must be one of: "
+            "'max_points'/'max_n', 'ratio', 'fixed_points'"
+        )
+
+    fallback = _search_best_params_for_n(pts, fallback_n, orig_ref_dense, area_ref)
+    if fallback["sampled"] is not None:
+        print(
+            f"[metric_threshold] no exact pass, fallback={strategy}, n={fallback_n} | "
+            f"alpha={fallback['alpha']}, smooth={fallback['smooth']}, area_diff={fallback['area_diff']:.4f}, "
+            f"hd95={fallback['hd95']:.4f}, hd_max={fallback['hd_max']:.4f}, "
+            f"anchors={fallback.get('n_anchor', 0)}"
+        )
+        return _curve_from_sampled(fallback["sampled"], export_mode)
+    if best_fail is not None and best_fail["sampled"] is not None:
+        return _curve_from_sampled(best_fail["sampled"], export_mode)
+    return _build_export_curve_from_n(pts, fallback_n)
 
 
 def sample_contour_for_export(xy: np.ndarray) -> np.ndarray:
@@ -637,9 +896,12 @@ def convert_rtstruct_to_model_xml():
     print(f"\nWrote model XML: {OUT_XML.resolve()}")
     print(
         f"Config: policy={POINT_POLICY}, ratio={RATIO}, fixed_points={FIXED_POINTS}, "
-        f"area_tol={AREA_DIFF_TOL}, haus_tol={HAUSDORFF_TOL}, metric_max_points={METRIC_MAX_POINTS}, "
-        f"metric_no_match={METRIC_NO_MATCH_STRATEGY}, metric_eval_mode={METRIC_EVAL_MODE}, "
-        f"alpha={CURVATURE_ALPHA}, export_mode={EXPORT_MODE}, coord_mode={COORD_MODE}"
+        f"area_tol={AREA_DIFF_TOL}, h95_tol={H95_TOL}, hmax_tol={HMAX_TOL}, "
+        f"metric_max_points={METRIC_MAX_POINTS}, metric_no_match={METRIC_NO_MATCH_STRATEGY}, "
+        f"eval_mode={METRIC_EVAL_MODE}, alpha_grid={METRIC_ALPHA_GRID}, smooth_grid={METRIC_SMOOTH_GRID}, "
+        f"orig_ref_dense={ORIG_REF_DENSE_POINTS}, export_mode={EXPORT_MODE}, coord_mode={COORD_MODE}, "
+        f"corner_guard={CORNER_GUARD_ENABLE}, corner_ratio={CORNER_GUARD_RATIO}, "
+        f"corner_k=[{CORNER_GUARD_K_MIN},{CORNER_GUARD_K_MAX}], corner_gap={CORNER_GUARD_MIN_GAP}"
     )
 
 

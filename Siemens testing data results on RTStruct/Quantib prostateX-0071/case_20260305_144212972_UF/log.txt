@@ -1,0 +1,37 @@
+2026-03-05 14:43:30:221 Info  @case 'case_20260305_144212972_UF' created by doctor
+
+2026-03-05 14:43:31:533 User  @on_imageImportMRIImages_clicked
+2026-03-05 14:43:50:432 Sec   @Dicom files in 'C:/MRI-Prostate/Internal testing data/Data with RTStruct/Quantib prostateX-0071/T2' imported by doctor
+
+2026-03-05 14:44:05:216 User  @on_imageImportApproveImage_clicked
+
+2026-03-05 14:44:06:561 User  @on_modelLoadRTStruct_clicked
+
+2026-03-05 14:44:53:706 User  @on_modelApproveModel_clicked
+
+2026-03-05 14:44:58:029 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:45:07:390 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:45:15:263 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:45:16:791 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:45:23:877 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:45:23:899 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:45:26:838 User  @on_functionZoom_clicked
+
+2026-03-05 14:45:30:939 User  @on_functionZoom_clicked
+
+2026-03-05 14:45:59:541 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:46:00:875 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:46:00:907 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:49:06:281 User  @on_lesionApproveLesionModels_clicked
+
+2026-03-05 15:40:35:614 User  @on_stageStart_clicked
+2026-03-05 15:40:36:729 Info  @go back to Start

@@ -1,0 +1,185 @@
+2026-03-05 14:06:55:892 Info  @case 'case_20260305_140322453_UF' created by doctor
+
+2026-03-05 14:06:58:179 User  @on_imageImportMRIImages_clicked
+2026-03-05 14:07:24:234 Sec   @Dicom files in 'C:/MRI-Prostate/Internal testing data/Data with RTStruct/BotImage sample/T2wAx-seriesnum_007-index_00' imported by doctor
+
+2026-03-05 14:07:26:680 User  @on_imageImportApproveImage_clicked
+
+2026-03-05 14:07:37:796 User  @on_modelLoadRTStruct_clicked
+
+2026-03-05 14:08:42:316 User  @on_functionZoom_clicked
+
+2026-03-05 14:08:48:217 User  @on_functionZoom_clicked
+
+2026-03-05 14:09:49:395 User  @on_modelApproveModel_clicked
+
+2026-03-05 14:10:50:820 User  @on_functionZoom_clicked
+
+2026-03-05 14:11:21:009 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:11:36:083 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:11:37:283 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:11:37:315 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:06:165 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:07:667 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:13:07:698 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:26:566 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:31:766 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:32:825 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:13:32:857 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:35:760 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:38:045 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:13:41:318 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:13:42:498 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:13:42:530 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:43:511 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:13:43:538 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:44:443 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:13:45:616 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:13:46:467 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:13:46:497 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:47:806 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:13:47:837 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:48:721 User  @on_lesionPreviousLesion_clicked
+
+2026-03-05 14:13:48:757 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:49:442 User  @on_lesionPreviousLesion_clicked
+
+2026-03-05 14:13:49:470 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:50:044 User  @on_lesionPreviousLesion_clicked
+
+2026-03-05 14:13:50:552 User  @on_lesionPreviousLesion_clicked
+
+2026-03-05 14:13:55:378 User  @on_lesionPreviousLesion_clicked
+
+2026-03-05 14:13:55:407 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:56:184 User  @on_lesionPreviousLesion_clicked
+
+2026-03-05 14:13:56:216 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:13:56:728 User  @on_lesionPreviousLesion_clicked
+
+2026-03-05 14:13:58:174 User  @on_lesionPreviousLesion_clicked
+
+2026-03-05 14:13:58:877 User  @on_lesionPreviousLesion_clicked
+
+2026-03-05 14:13:58:905 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:15:13:060 User  @on_lesionApproveLesionModels_clicked
+
+2026-03-05 14:15:40:525 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:15:40:555 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:15:44:537 User  @on_functionZoom_clicked
+
+2026-03-05 14:16:10:946 User  @on_lesionApproveLesionModels_clicked
+
+2026-03-05 14:18:32:954 User  @on_stageImportImage_clicked
+2026-03-05 14:18:35:520 Info  @go back to Import Image
+
+2026-03-05 14:18:39:136 User  @on_imageImportMRIImages_clicked
+2026-03-05 14:18:56:598 Sec   @Dicom files in 'C:/MRI-Prostate/Internal testing data/Data with RTStruct/BotImage sample/T2wAx-seriesnum_007-index_00' imported by doctor
+
+2026-03-05 14:18:57:448 User  @on_imageImportApproveImage_clicked
+
+2026-03-05 14:19:08:151 User  @on_modelLoadRTStruct_clicked
+
+2026-03-05 14:19:34:633 User  @on_modelApproveModel_clicked
+
+2026-03-05 14:19:51:786 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:20:00:595 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:20:03:110 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:20:06:412 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:20:06:436 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:20:10:934 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:20:11:760 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:20:11:792 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:20:14:927 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:20:16:206 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:20:16:248 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:20:18:216 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:20:22:433 User  @on_lesionApproveLesionModels_clicked
+
+2026-03-05 14:20:39:291 User  @on_functionZoom_clicked
+
+2026-03-05 14:20:43:297 User  @on_functionZoom_clicked
+
+2026-03-05 14:36:10:599 User  @on_lesionPreviousLesion_clicked
+
+2026-03-05 14:36:10:630 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:36:12:002 User  @on_lesionPreviousLesion_clicked
+
+2026-03-05 14:36:12:025 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 14:36:13:145 User  @on_lesionPreviousLesion_clicked
+
+2026-03-05 14:39:45:764 User  @on_lesionNextLesion_clicked
+
+2026-03-05 14:41:31:428 User  @on_lesionApproveLesionModels_clicked
+
+2026-03-05 14:42:10:304 User  @on_stageStart_clicked
+2026-03-05 14:42:11:536 Info  @go back to Start
+2026-03-05 16:57:59:712 Info  @case 'case_20260305_140322453_UF' opened by doctor
+
+2026-03-05 16:58:05:460 User  @on_functionZoom_clicked
+
+2026-03-05 16:58:37:209 User  @on_functionZoom_clicked
+
+2026-03-05 17:05:47:463 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 17:05:49:026 User  @on_lesionPirads_currentIndexChanged
+
+2026-03-05 17:05:56:265 User  @on_lesionNextLesion_clicked
+
+2026-03-05 17:06:00:486 User  @on_lesionPreviousLesion_clicked
+
+2026-03-05 17:06:20:507 User  @on_lesionNextLesion_clicked
+
+2026-03-05 17:07:22:238 User  @on_lesionPreviousLesion_clicked
+
+2026-03-05 17:07:41:615 User  @on_lesionNextLesion_clicked
+
+2026-03-05 17:36:30:852 User  @on_lesionApproveLesionModels_clicked
+
+2026-03-05 17:36:36:798 User  @system menu selected (Exit)
+2026-03-05 17:36:39:457 Info  @UroFusion exited

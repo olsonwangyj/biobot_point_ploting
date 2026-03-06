@@ -1,0 +1,10 @@
+<image-stack>
+    <file-version>1</file-version>
+    <modality>MRI</modality>
+    <pixel-size>2</pixel-size>
+    <windowing-center-width-dicom>434,894</windowing-center-width-dicom>
+    <windowing-center-width-user>434,894</windowing-center-width-user>
+    <dimensions-x-y-z>384,384,19</dimensions-x-y-z>
+    <spacing-x-y-z>0.5000,0.5000,3.0000</spacing-x-y-z>
+    <origin-x-y-z>-96.0000,-66.0000,-128.5000</origin-x-y-z>
+</image-stack>
